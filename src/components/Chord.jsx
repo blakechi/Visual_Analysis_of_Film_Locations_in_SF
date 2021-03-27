@@ -348,7 +348,7 @@ const Chord = ({ data, returnClickedItems, toCleanClickedItems }) => {
   });
   return (
     <div className="chord">
-      <svg className="d3-chord" viewBox={`0 0 ${width} ${height}`}>
+      <svg className="d3-chord" id={id} viewBox={`0 0 ${width} ${height}`}>
         <g
           ref={ref}
           transform={`translate(${horizontalShift}, ${verticalShift})`}
