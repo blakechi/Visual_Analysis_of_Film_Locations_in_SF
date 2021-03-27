@@ -3,6 +3,137 @@ import * as d3 from "d3";
 
 import "../css/Chord.css";
 
+const id = (node) => {
+  return `${node.parent ? id(node.parent) + "." : ""}${node.data.name}`;
+};
+
+const bilink = (root) => {
+  const map = new Map(root.leaves().map((d) => [id(d), d]));
+  for (const d of root.leaves()) {
+    d.incoming = [];
+    d.outgoing = d.data.imports.map((i) => [d, map.get(i)]);
+  }
+  for (const d of root.leaves()) {
+    for (const o of d.outgoing) {
+      o[1].incoming.push(o);
+    }
+  }
+  return root;
+};
+
+const construct_children = (data, tgtData, tgtInfo, restsInfo) => {
+  return tgtData.map((tgt) => {
+    if (tgt.name === "Others") {
+      return {
+        name: tgt.name,
+        size: tgt.count,
+        imports: [],
+      };
+    }
+
+    const selectedData = data.filter((ele) => ele[tgtInfo.name] === tgt.name);
+    let connections = selectedData.map((ele) => {
+      var results = [];
+      restsInfo.forEach((rest) => {
+        if (rest.list.includes(ele[rest.name])) {
+          results.push(rest.prefix.concat(ele[rest.name]));
+        } else {
+          results.push(rest.prefix.concat("Others"));
+        }
+      });
+
+      return results;
+    });
+    connections = connections.reduce((acc, curr) => acc.concat(curr), []);
+    connections = [...new Set(connections)];
+
+    return {
+      name: tgt.name,
+      size: tgt.count,
+      imports: connections,
+    };
+  });
+};
+
+const hierachy_SF = (data, uniTitle, uniLoc, uniDirector) => {
+  const titleInfo = {
+    name: "Title",
+    prefix: "SF_Films.Title.",
+    list: uniTitle.map((ele) => ele.name),
+  };
+  const locInfo = {
+    name: "Locations",
+    prefix: "SF_Films.Locations.",
+    list: uniLoc.map((ele) => ele.name),
+  };
+  const directorInfo = {
+    name: "Director",
+    prefix: "SF_Films.Director.",
+    list: uniDirector.map((ele) => ele.name),
+  };
+
+  const title = {
+    name: "Title",
+    children: construct_children(data, uniTitle, titleInfo, [
+      locInfo,
+      directorInfo,
+    ]),
+  };
+  const loc = {
+    name: "Locations",
+    children: construct_children(data, uniLoc, locInfo, [
+      titleInfo,
+      directorInfo,
+    ]),
+  };
+  const director = {
+    name: "Director",
+    children: construct_children(data, uniDirector, directorInfo, [
+      locInfo,
+      titleInfo,
+    ]),
+  };
+
+  return {
+    name: "SF_Films",
+    children: [title, loc, director],
+  };
+};
+
+const getColumnUniCount = (data, columnName) => {
+  var tgtList = data.map((ele) => ele[columnName]);
+
+  var tmp_counts = {};
+  for (var i = 0; i < tgtList.length; i++) {
+    tmp_counts[tgtList[i]] = 1 + (tmp_counts[tgtList[i]] || 0);
+  }
+
+  const entries = Object.entries(tmp_counts);
+  var uniCounts = entries.map((ele) => ({ name: ele[0], count: ele[1] }));
+  uniCounts = uniCounts.sort((a, b) => {
+    var A = a.count;
+    var B = b.count;
+    if (A < B) {
+      return 1;
+    }
+    if (A > B) {
+      return -1;
+    }
+
+    return 0; // if equal
+  });
+
+  const others = {
+    name: "Others",
+    count: uniCounts.slice(59).reduce((acc, curr) => acc + curr.count, 0),
+  };
+
+  uniCounts = uniCounts.slice(0, 59);
+  uniCounts.push(others);
+
+  return uniCounts;
+};
+
 const Chord = ({ data, returnClickedItems, toCleanClickedItems }) => {
   const width = window.innerHeight;
   const height = window.innerHeight;
@@ -217,7 +348,7 @@ const Chord = ({ data, returnClickedItems, toCleanClickedItems }) => {
   });
   return (
     <div className="chord">
-      <svg className="d3-chord" id={id} viewBox={`0 0 ${width} ${height}`}>
+      <svg className="d3-chord" viewBox={`0 0 ${width} ${height}`}>
         <g
           ref={ref}
           transform={`translate(${horizontalShift}, ${verticalShift})`}
@@ -225,137 +356,6 @@ const Chord = ({ data, returnClickedItems, toCleanClickedItems }) => {
       </svg>
     </div>
   );
-};
-
-const id = (node) => {
-  return `${node.parent ? id(node.parent) + "." : ""}${node.data.name}`;
-};
-
-const bilink = (root) => {
-  const map = new Map(root.leaves().map((d) => [id(d), d]));
-  for (const d of root.leaves()) {
-    d.incoming = [];
-    d.outgoing = d.data.imports.map((i) => [d, map.get(i)]);
-  }
-  for (const d of root.leaves()) {
-    for (const o of d.outgoing) {
-      o[1].incoming.push(o);
-    }
-  }
-  return root;
-};
-
-const construct_children = (data, tgtData, tgtInfo, restsInfo) => {
-  return tgtData.map((tgt) => {
-    if (tgt.name === "Others") {
-      return {
-        name: tgt.name,
-        size: tgt.count,
-        imports: [],
-      };
-    }
-
-    const selectedData = data.filter((ele) => ele[tgtInfo.name] === tgt.name);
-    let connections = selectedData.map((ele) => {
-      var results = [];
-      restsInfo.forEach((rest) => {
-        if (rest.list.includes(ele[rest.name])) {
-          results.push(rest.prefix.concat(ele[rest.name]));
-        } else {
-          results.push(rest.prefix.concat("Others"));
-        }
-      });
-
-      return results;
-    });
-    connections = connections.reduce((acc, curr) => acc.concat(curr), []);
-    connections = [...new Set(connections)];
-
-    return {
-      name: tgt.name,
-      size: tgt.count,
-      imports: connections,
-    };
-  });
-};
-
-const hierachy_SF = (data, uniTitle, uniLoc, uniDirector) => {
-  const titleInfo = {
-    name: "Title",
-    prefix: "SF_Films.Title.",
-    list: uniTitle.map((ele) => ele.name),
-  };
-  const locInfo = {
-    name: "Locations",
-    prefix: "SF_Films.Locations.",
-    list: uniLoc.map((ele) => ele.name),
-  };
-  const directorInfo = {
-    name: "Director",
-    prefix: "SF_Films.Director.",
-    list: uniDirector.map((ele) => ele.name),
-  };
-
-  const title = {
-    name: "Title",
-    children: construct_children(data, uniTitle, titleInfo, [
-      locInfo,
-      directorInfo,
-    ]),
-  };
-  const loc = {
-    name: "Locations",
-    children: construct_children(data, uniLoc, locInfo, [
-      titleInfo,
-      directorInfo,
-    ]),
-  };
-  const director = {
-    name: "Director",
-    children: construct_children(data, uniDirector, directorInfo, [
-      locInfo,
-      titleInfo,
-    ]),
-  };
-
-  return {
-    name: "SF_Films",
-    children: [title, loc, director],
-  };
-};
-
-const getColumnUniCount = (data, columnName) => {
-  var tgtList = data.map((ele) => ele[columnName]);
-
-  var tmp_counts = {};
-  for (var i = 0; i < tgtList.length; i++) {
-    tmp_counts[tgtList[i]] = 1 + (tmp_counts[tgtList[i]] || 0);
-  }
-
-  const entries = Object.entries(tmp_counts);
-  var uniCounts = entries.map((ele) => ({ name: ele[0], count: ele[1] }));
-  uniCounts = uniCounts.sort((a, b) => {
-    var A = a.count;
-    var B = b.count;
-    if (A < B) {
-      return 1;
-    }
-    if (A > B) {
-      return -1;
-    }
-
-    return 0; // if equal
-  });
-
-  const others = {
-    name: "Others",
-    count: uniCounts.slice(59).reduce((acc, curr) => acc + curr.count, 0),
-  };
-
-  uniCounts = uniCounts.slice(0, 59);
-  uniCounts.push(others);
-
-  return uniCounts;
 };
 
 export default Chord;
